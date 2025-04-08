@@ -1,0 +1,77 @@
+---
+title: |
+  | ISL project
+header-includes: \usepackage{setspace} \onehalfspacing
+output:
+  pdf_document: default
+  word_document: default
+always_allow_html: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+This report outlines a linear optimization model designed to minimize the total cost of acquiring multiple commodities from different countries, transporting them through ports and warehouses, and finally distributing them to villages. The problem involves:
+
+- Acquisition costs (varying by country and commodity).
+
+- Transportation costs (from countries to ports, ports to warehouses, and warehouses to villages).
+
+- Handling costs (at ports and warehouses, dependent on total weight).
+
+- Capacity constraints (when buying and transporting the commodities)
+
+- Nutritional demand (ensuring villages receive required quantities).
+
+The goal is to determine the optimal flow of commodities across the supply chain while minimizing total costs.
+
+## Problem Description
+Key Components:
+1) Commodities (i): Different goods to be acquired (e.g., food, medical supplies).
+
+2) Countries (c): Sources where commodities are procured, each with different acquisition costs.
+
+3) Ports (p): Intermediate hubs where goods are consolidated and handled.
+
+4) Warehouses (w): Storage and distribution centers before final delivery.
+
+5) Villages (v): Final destinations with specified demand for each commodity.
+
+Cost Structure:
+- Aquisition cost ($C_{ic}$) cost of commodity $i$ from country $c$
+- Transportation costs:
+  1) From country $c$ to port $p$ ($S_{icp}$)
+  2) From port $p$ to distribution center $w$ ($L_{ipw}$)
+  3) From distribution centers to each of the villages $v$ ($T_{iwv}$)
+- Handling costs:
+  1) Handling cost in each of the ports calculated on total weight ($P_p$)
+  2) Handling cost in each of the distribution centers calculated on total weight ($W_w$)
+   
+## Mathematical Model
+Objective function:
+$$
+\min \quad
+\sum_{i \in I} \sum_{j \in J} c^{\text{purchase}}_{ij} \cdot x_{ij}
+\ + \sum_{i \in I} \sum_{j \in J} \sum_{k \in K} c^{\text{ship}}_{ijk} \cdot y_{ijk}
+\ + \sum_{i \in I} \sum_{k \in K} c^{\text{port\_handle}}_{ik} \cdot \left(\sum_{j} y_{ijk}\right)
+\ + \sum_{i \in I} \sum_{k \in K} \sum_{l \in L} c^{\text{land\_trans}}_{ikl} \cdot z_{ikl}
+\ + \sum_{i \in I} \sum_{l \in L} c^{\text{wh\_handle}}_{il} \cdot \left(\sum_{k} z_{ikl}\right)
+\ + \sum_{i \in I} \sum_{l \in L} \sum_{m \in M} c^{\text{distribution}}_{ilm} \cdot w_{ilm}
+$$
+
+
+Constraints:
+(Each of the constraints written down)
+
+## Solution Approach
+The problem is solved through Linear Programming using optimization solvers (Gurobi, CPLEX, or open-source tools like PuLP).
+
+## Expected Outcomes
+- Optimal shipment quantities: $x_{icp}, y_{ipv}, z_{iwv}$
+
+- Minimum total cost of the supply chain.
+
+- Insights into cost-saving opportunities and pressure points.
+
