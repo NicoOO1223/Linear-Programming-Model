@@ -1,100 +1,116 @@
 import pandas as pd
 import pulp
 
-
 ######################   Data, Vectors and Matrices   #########################
+# Read the data from the Excel file
 data = pd.read_excel('Data.xlsx', sheet_name=None)
 
+# Grouping locations by 'LocationTYpe'
 locationDict = data['Nodes'].groupby('LocationTYpe')['Location'].apply(list).to_dict()
 
+# Extracting locations for different types
 Beneficiary_camps = locationDict.get('Beneficiary Camp', [])
 Ports = locationDict.get('Port', [])
 Suppliers = locationDict.get('Supplier', [])
 Warehouses = locationDict.get('Warehouse', [])
-commodities = data['Commodities'].iloc[0:, 0].tolist()
-nutrients = data['Nutrients'].iloc[0:, 0].tolist()
 
+# Extract commodities and nutrients lists
+commodities = data['Commodities'].iloc[:, 0].tolist()
+nutrients = data['Nutrients'].iloc[:, 0].tolist()
+
+# Creating a dictionary for procurement prices, with commodities as keys and suppliers as subkeys
 cij = data['Procurement'].groupby(['Commodity', 'Supplier'])['Procurement price ($/ton)'].first().unstack(fill_value=0).to_dict()
 
-print(cij)
-#Cost Matrices:
+# Create the dictionary for shipping costs (cijk)
+cijk = {}
 
-#aquisition + sea transport cost
-acquisition_cost = {
-    (row['Commodity'], row['Supplier']): row['Procurement price ($/ton)']
-    for _, row in data['Procurement'].iterrows()
-}
-aq_sea_cost = {}
 for _, row in data['SeaTransport'].iterrows():
-    i = row['Commodity']
-    j = row['Origin']
-    p = row['Destination']
-    sea_cost = row['SeaTransport cost ($/ton)']
-
-    if (i, j) in acquisition_cost:
-        total_cost = acquisition_cost[(i, j)] + sea_cost
-        aq_sea_cost[(i, j, p)] = total_cost
-
-
-#transportation cost from Port p to Warehouse w
-land_pw_cost = {
-    (row['Origin'], row['Destination']): row['Landtransport cost ($/ton)']
-    for _, row in data['LandTransport'].iloc[:11].iterrows()
-}
-
-#transportation cost from Warehouse w to Village v
-land_wv_cost = {
-    (row['Origin'], row['Destination']): row['Landtransport cost ($/ton)']
-    for _, row in data['LandTransport'].iloc[11:].iterrows()
-}
-
-#procurement capacity
-procurement_capacity = {
-    (row['Commodity'], row['Supplier']): row['Procurement capacity (ton/month)']
-    for _, row in data['Procurement'].iterrows()
-}
-
-#nutritional values for each commodity
-nutritional_values = {
-    (row['Commodity (100g)'], nutrient): row[nutrient]
-    for _, row in data['Nutritional values'].iterrows()
-    for nutrient in data['Nutritional values'].columns[1:]
-}
-
-######################   MODEL   #########################
-model = pulp.LpProblem("Minimize_Cost", pulp.LpMinimize)
-
-# Decision Variables
-x = pulp.LpVariable.dicts("x", aq_sea_cost.keys(), lowBound=0, cat='Continuous')
-y = pulp.LpVariable.dicts("y", land_pw_cost.keys(), lowBound=0, cat='Continuous')
-z = pulp.LpVariable.dicts("z", land_wv_cost.keys(), lowBound=0, cat='Continuous')
+    origin = row['Origin']
+    destination = row['Destination']
+    commodity = row['Commodity']
+    cost = row['SeaTransport cost ($/ton)']
+    
+    # Initialize the nested dictionary if not already present
+    if origin not in cijk:
+        cijk[origin] = {}
+    if commodity not in cijk[origin]:
+        cijk[origin][commodity] = {}
+    
+    cijk[origin][commodity][destination] = cost
 
 
-### Cost function ###
-model += (
-    pulp.lpSum(x[i_j_p] * aq_sea_cost[i_j_p] for i_j_p in aq_sea_cost) +
-    pulp.lpSum(y[p_w] * land_pw_cost[p_w] for p_w in land_pw_cost) +
-    pulp.lpSum(z[w_v] * land_wv_cost[w_v] for w_v in land_wv_cost)
-)
+# Create a dictionary with Port names as keys and their corresponding handling costs as values
+port_data = data['Nodes'][data['Nodes']['LocationTYpe'] == 'Port'][['Location', 'Port capacity (mt/month)']]
+
+hp = port_data.set_index('Location')['Port capacity (mt/month)'].to_dict()
+
+port_to_warehouse = data['LandTransport'].iloc[:11]  
+warehouse_to_village = data['LandTransport'].iloc[11:]  
 
 
-### Constraints ###
+clk = {}
 
-#Procurement capacity
-for (i, j) in procurement_capacity:
-    total_procured = pulp.lpSum(x[i, j, p] for p in Ports if (i, j, p) in x)
-    model += total_procured <= procurement_capacity[(i, j)], f"ProcureCap_{i}_{j}"
+for _, row in port_to_warehouse.iterrows():
+    origin = row['Origin']
+    destination = row['Destination']
+    cost = row['Landtransport cost ($/ton)']
+    
+    # Initialize the nested dictionary if not already present
+    if origin not in clk:
+        clk[origin] = {}
+    
+    clk[origin][destination] = cost
 
-#Flow conservation
-for i in commodities:
-    for p in Ports:
-        incoming = pulp.lpSum(x[i, j, p] for j in Suppliers if (i, j, p) in x)
-        outgoing = pulp.lpSum(y[i, p, w] for w in Warehouses if (i, p, w) in y)
-        model += incoming == outgoing, f"Flow_Port_{i}_{p}"
+# Extracting warehouse handling costs
+warehouse_data = data['Nodes'][data['Nodes']['LocationTYpe'] == 'Warehouse'][['Location', 'Handling cost ($/ton)']]
 
-for i in commodities:
-    for w in Warehouses:
-        incoming = pulp.lpSum(y[i, p, w] for p in Ports if (i, p, w) in y)
-        outgoing = pulp.lpSum(z[i, w, v] for v in Beneficiary_camps if (i, w, v) in z)
-        model += incoming == outgoing, f"Flow_Warehouse_{i}_{w}"
+# Create a dictionary with Warehouse names as keys and their corresponding handling costs as values
+hw = warehouse_data.set_index('Location')['Handling cost ($/ton)'].to_dict()
+
+ckm = {}
+
+for _, row in warehouse_to_village.iterrows():
+    origin = row['Origin']
+    destination = row['Destination']
+    cost = row['Landtransport cost ($/ton)']
+    
+    # Initialize the nested dictionary if not already present
+    if origin not in ckm:
+        ckm[origin] = {}
+    
+    ckm[origin][destination] = cost
+
+
+### MODEL ###
+lp = pulp.LpProblem('Optimizating', pulp.LpMinimize)
+
+x_ij = pulp.LpVariable.dicts('purchase', (commodities, Suppliers), lowBound=0, cat='Continuous')
+y_ijk = pulp.LpVariable.dicts('ship', (commodities, Suppliers, Ports), lowBound=0, cat='Continuous')
+z_ikl = pulp.LpVariable.dicts('land', (commodities, Ports, Warehouses), lowBound=0, cat='Continuous')
+w_ilm = pulp.LpVariable.dicts('land', (commodities, Warehouses, Beneficiary_camps), lowBound=0, cat='Continuous')
+
+#Objective function
+lp += pulp.lpSum(cij[supplier][commodity] * x_ij[commodity][supplier] 
+                 for supplier in Suppliers 
+                 for commodity in commodities) \
+     + pulp.lpSum(cijk.get(supplier, {}).get(commodity, {}).get(port, 0) * y_ijk[commodity][supplier][port] 
+                 for supplier in Suppliers 
+                 for commodity in commodities 
+                 for port in Ports) \
+     + pulp.lpSum(hp[port] * pulp.lpSum(y_ijk[commodity][supplier][port] 
+                    for commodity in commodities 
+                    for supplier in Suppliers) 
+                for port in Ports) \
+     + pulp.lpSum(clk.get(port, {}).get(warehouse, 0) * z_ikl[commodity][port][warehouse]
+                 for commodity in commodities
+                 for port in Ports
+                 for warehouse in Warehouses) \
+    + pulp.lpSum(hw[warehouse] * pulp.lpSum(z_ikl[commodity][port][warehouse] 
+                    for port in Ports 
+                    for commodity in commodities) 
+                for warehouse in Warehouses) \
+    + pulp.lpSum(ckm.get(warehouse, {}).get(village, 0) * w_ilm[commodity][warehouse][village]
+                 for commodity in commodities 
+                 for warehouse in Warehouses
+                 for village in Beneficiary_camps)
 
