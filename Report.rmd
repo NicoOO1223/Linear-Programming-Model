@@ -1,6 +1,4 @@
 ---
-title: |
-  | ISL project
 header-includes: \usepackage{setspace} \onehalfspacing
 output:
   pdf_document: default
@@ -12,66 +10,72 @@ always_allow_html: yes
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Introduction
-This report outlines a linear optimization model designed to minimize the total cost of acquiring multiple commodities from different countries, transporting them through ports and warehouses, and finally distributing them to villages. The problem involves:
-
-- Acquisition costs (varying by country and commodity).
-
-- Transportation costs (from countries to ports, ports to warehouses, and warehouses to villages).
-
-- Handling costs (at ports and warehouses, dependent on total weight).
-
-- Capacity constraints (when buying and transporting the commodities)
-
-- Nutritional demand (ensuring villages receive required quantities).
-
-The goal is to determine the optimal flow of commodities across the supply chain while minimizing total costs.
-
-## Problem Description
-Key Components:
-1) Commodities (i): Different goods to be acquired (e.g., food, medical supplies).
-
-2) Countries (c): Sources where commodities are procured, each with different acquisition costs.
-
-3) Ports (p): Intermediate hubs where goods are consolidated and handled.
-
-4) Warehouses (w): Storage and distribution centers before final delivery.
-
-5) Villages (v): Final destinations with specified demand for each commodity.
-
-Cost Structure:
-- Aquisition cost ($C_{ic}$) cost of commodity $i$ from country $c$
-- Transportation costs:
-  1) From country $c$ to port $p$ ($S_{icp}$)
-  2) From port $p$ to distribution center $w$ ($L_{ipw}$)
-  3) From distribution centers to each of the villages $v$ ($T_{iwv}$)
-- Handling costs:
-  1) Handling cost in each of the ports calculated on total weight ($P_p$)
-  2) Handling cost in each of the distribution centers calculated on total weight ($W_w$)
-   
 ## Mathematical Model
-Objective function:
+## Objective Function
+
+Minimize total cost:
+
 $$
-\min \quad
-\sum_{i \in I} \sum_{j \in J} c^{\text{purchase}}_{ij} \cdot x_{ij}
-\ + \sum_{i \in I} \sum_{j \in J} \sum_{k \in K} c^{\text{ship}}_{ijk} \cdot y_{ijk}
-\ + \sum_{i \in I} \sum_{k \in K} c^{\text{port\_handle}}_{ik} \cdot \left(\sum_{j} y_{ijk}\right)
-\ + \sum_{i \in I} \sum_{k \in K} \sum_{l \in L} c^{\text{land\_trans}}_{ikl} \cdot z_{ikl}
-\ + \sum_{i \in I} \sum_{l \in L} c^{\text{wh\_handle}}_{il} \cdot \left(\sum_{k} z_{ikl}\right)
-\ + \sum_{i \in I} \sum_{l \in L} \sum_{m \in M} c^{\text{distribution}}_{ilm} \cdot w_{ilm}
+\text{Minimize} \quad \sum_{i,j} c_{ij} x_{ij} + \sum_{i,j,k} c_{ijk} y_{ijk} + \sum_k h_p^k \sum_{i,j} y_{ijk} + \sum_{i,k,l} c_{lk} z_{ikl} + \sum_l h_w^l \sum_{i,k} z_{ikl} + \sum_{i,l,m} c_{km} w_{ilm}
 $$
 
+# Constraints
 
-Constraints:
-(Each of the constraints written down)
+#### Port Capacity
 
-## Solution Approach
-The problem is solved through Linear Programming using optimization solvers (Gurobi, CPLEX, or open-source tools like PuLP).
+$\sum_{i,j} y_{ijk} \leq \text{Cap}_p^k \quad \forall k$
 
-## Expected Outcomes
-- Optimal shipment quantities: $x_{icp}, y_{ipv}, z_{iwv}$
+#### Warehouse Capacity
 
-- Minimum total cost of the supply chain.
+$\sum_{i,k} z_{ikl} \leq \text{Cap}_w^l \quad \forall l$
 
-- Insights into cost-saving opportunities and pressure points.
+#### Supplier Balance
+
+$\sum_k y_{ijk} = x_{ij} \quad \forall i, j$
+
+#### Port Balance
+
+$\sum_j y_{ijk} = \sum_l z_{ikl} \quad \forall i, k$
+
+#### Warehouse Balance
+
+$\sum_k z_{ikl} = \sum_m w_{ilm} \quad \forall i, l$
+
+#### Nutritional Requirement
+
+$\sum_{i,l} w_{ilm} \cdot \text{nutrient}_{i,n} \geq \text{requirement}_{m,n} \quad \forall m, n$
+
+
+# Variable Definitions
+
+The model uses the following variables and parameters:
+
+### Decision Variables
+
+- $x_{ij}$: Quantity of product *i* shipped from supplier *i* to demand node *j*  
+- $y_{ijk}$: Quantity of product *i* shipped from supplier *i* to port *k* for demand node *j*  
+- $z_{ikl}$: Quantity of product *i* transported from port *k* to warehouse *l*  
+- $w_{ilm}$: Quantity of product *i* delivered from warehouse *l* to market *m*  
+
+### Cost Parameters
+
+- $c_{ij}$: Cost per unit of shipping product *i* from supplier *i* to demand node *j*  
+- $c_{ijk}$: Cost per unit of transporting product *i* from supplier *i* to port *k* for demand node *j*  
+- $c_{lk}$: Cost per unit of transporting product *i* from port *k* to warehouse *l*  
+- $c_{km}$: Cost per unit of transporting product *i* from warehouse *l* to market *m*  
+
+### Handling Costs
+
+- $h_p^k$: Handling cost per unit at port *k*  
+- $h_w^l$: Handling cost per unit at warehouse *l*  
+
+### Capacity Parameters
+
+- $\text{Cap}_p^k$: Capacity of port *k*  
+- $\text{Cap}_w^l$: Capacity of warehouse *l*  
+
+### Nutritional Parameters
+
+- $\text{nutrient}_{i,n}$: Amount of nutrient *n* in product *i*  
+- $\text{requirement}_{m,n}$: Minimum required amount of nutrient *n* at market *m*  
 
