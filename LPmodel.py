@@ -150,5 +150,3 @@ for var in lp.variables():
         print(f"{var.name} = {var.varValue}")
 
 print(f"Total Cost = {pulp.value(lp.objective)}")
-
-print(cij['BRAZIL']['BEANS'])
